@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GruReporta</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: Arial, sans-serif; }
+    #map { height: 100%; z-index: 1; }
+
+    .overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #007bff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeOut 3s forwards;
+    }
+
+    .overlay h1 {
+      color: white;
+      font-size: 2.5rem;
+      font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    }
+
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; visibility: hidden; }
+    }
+
+    .sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 100%;
+      max-height: 50%;
+      background: white;
+      border-top: 1px solid #ccc;
+      padding: 1rem;
+      overflow-y: auto;
+      display: none;
+      z-index: 10;
+      border-radius: 20px;
+    }
+    .close-form {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #333;
+  z-index: 5;
+  width: auto;     
+  height: auto;      
+  padding: 5px;
+  line-height: 1;
+}
+
+
+
+    .sidebar.active { display: block; }
+
+    .status {
+      padding: 0.2rem 0.5rem;
+      border-radius: 5px;
+      color: white;
+      font-size: 0.8rem;
+      margin-left: 0.5rem;
+    }
+    .aberto { background: red; }
+    .vistoriado, .vistoriado-em-andamento { background: orange; }
+    .processo { background: blue; }
+    .concluido { background: green; }
+
+    .add-btn {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .close-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  color: #333;
+  z-index: 11;
+}
+
+
+    .form-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 4;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .form-box {
+  position: relative;
+  background: white;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+  border-radius: 10px;
+}
+
+
+    .form-box h3 {
+      margin-bottom: 1rem;
+    }
+
+    .form-box input,
+    .form-box textarea {
+      width: 100%;
+      margin-bottom: 0.8rem;
+      padding: 0.5rem;
+    }
+
+    .firula {
+      
+      width: 30px;
+      height: 30px;
+      padding: 0.6rem;
+      background: #ff0000;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .enviar {
+      
+      width: 70px;
+      height: 30px;
+      padding: 0.6rem;
+      background: #1044d4;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    ul {
+      padding: 15px;
+    }
+    
+
+    @media (min-width: 600px) {
+      .sidebar {
+        width: 300px;
+        max-height: 100%;
+        border-left: 1px solid #ccc;
+        border-top: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    
+    <h1>GruReporta</h1>
+  </div>
+
+  <div id="map"></div>
+  <div class="sidebar" id="sidebar">
+    <button class="close-btn" onclick="closeSidebar()">X</button>
+    <h3>Chamados na Rua</h3>
+    <ul id="report-list"></ul>
+  </div>
+  
+  <button class="add-btn" onclick="openForm(), closeSidebar()">+ Novo Chamado</button>
+  <div class="form-overlay" id="formOverlay">
+    <div class="form-box">
+      <button class="firula" onclick="closeForm()">×</button>
+      <h3>Novo Chamado</h3>
+      <input type="text" placeholder="Nome da Rua (obrigatório)" required>
+      <input type="number" placeholder="Número (obrigatório)" required>
+      <input type="date" placeholder="Data do chamado (obrigatório)" required>
+      <input type="email" placeholder="Email (obrigatório)" required>
+      <textarea placeholder="Descrição da demanda (obrigatório)" required></textarea>
+      <input type="file" accept="image/*,video/*">
+      <button class='enviar' onclick="closeForm(), alerta()">Enviar</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', {
+      center: [-23.4648, -46.5384],
+      zoom: 14,
+      maxBounds: [[-23.6, -46.7], [-23.3, -46.4]],
+      maxBoundsViscosity: 1.0
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const chamados = [
+      { rua: "Rua das Palmeiras", numero: 123, data: "22-05-2025", status: "aberto", descricao: "Buraco na via", setor: "SAR02", concluido: false, coords: [-23.465, -46.538], imagem: 'https://cdn6.campograndenews.com.br/uploads/noticias/2020/03/10/3jakh3cot9q8s.jpg'},
+      { rua: "Rua das Palmeiras", numero: 125, data: "20-05-2025", status: "concluido", descricao: "Poste sem iluminação", setor: "SAR04", concluido: true, coords: [-23.4655, -46.5382], imagem:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLdSwujEcXfAk5rdPk4RAP9as0FU6MJv-9Gg&s' },
+      { rua: "Av. Guarulhos", numero: 1000, data: "21-05-2025", status: "vistoriado", descricao: "Enxurrada constante", setor: "SAR02", concluido: false, coords: [-23.46, -46.535], imagem:'https://blog.ofitexto.com.br/wp-content/uploads/2023/03/2017_09_12-Enchentes-alagamentos-inundacoes-e-enxurradas-voce-sabe-a-diferenca-GEOGRAFIA-4.jpg' },
+      { rua: "Rua Bela Vista", numero: 45, data: "18-05-2025", status: "aberto", descricao: "Alagamento", setor: "SAR02", concluido: false, coords: [-23.466, -46.537], imagem:'https://sbtnews.sbt.com.br/_next/image?url=https%3A%2F%2Fsbt-news-assets-prod.s3.sa-east-1.amazonaws.com%2FMarginal_Tiete_na_altura_da_ponte_das_Bandeiras_c366f92226.jpg&w=400&q=90' },
+      { rua: "Rua Bela Vista", numero: 48, data: "12-05-2025", status: "concluido", descricao: "Troca de poste", setor: "SAR04", concluido: true, coords: [-23.4662, -46.5371], imagem:'https://leisecamarica.com.br/images/noticias/43285/15042022133813_Screenshot.png' },
+      { rua: "Av. Otávio Braga", numero: 200, data: "19-05-2025", status: "vistoriado", descricao: "Cratera no meio da rua", setor: "SAR02", concluido: false, coords: [-23.467, -46.539], imagem: 'https://s2-g1.glbimg.com/gBd1OIAwOZ6kA8Ptj62ZQe-ioho=/0x0:1280x720/984x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_59edd422c0c84a879bd37670ae4f538a/internal_photos/bs/2019/I/L/Bzt7dQT4C0ii8tJxWubg/whatsapp-image-2019-05-16-at-07.53.42.jpeg' },
+      { rua: "Rua dos Pássaros", numero: 32, data: "10-05-2025", status: "vistoriado", descricao: "Luminária quebrada", setor: "SAR04", concluido: false, coords: [-23.468, -46.536], imagem: 'https://thumbs.dreamstime.com/b/luz-de-rua-quebrada-50463352.jpg' },
+      { rua: "Rua dos Pássaros", numero: 34, data: "05-05-2025", status: "concluido", descricao: "Fiação exposta", setor: "SAR04", concluido: true, coords: [-23.4681, -46.5362], imagem: 'https://www.folhadebrumadinho.com.br/wp-content/uploads/2023/01/Screenshot_20230112-222348_Gallery-1024x1029.jpg' },
+      { rua: "Rua da União", numero: 75, data: "15-05-2025", status: "aberto", descricao: "Poça d'água constante", setor: "SAR02", concluido: false, coords: [-23.469, -46.534], imagem: 'https://cdn6.campograndenews.com.br/uploads/noticias/2020/03/10/8gki7c5s9hnn.jpg' },
+      { rua: "Rua da União", numero: 78, data: "13-05-2025", status: "concluido", descricao: "Lâmpada queimada", setor: "SAR04", concluido: true, coords: [-23.4692, -46.5341], imagem:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLdSwujEcXfAk5rdPk4RAP9as0FU6MJv-9Gg&s' },
+      { rua: "Av. Monteiro Lobato", numero: 400, data: "17-05-2025", status: "vistoriado", descricao: "Bueiro entupido", setor: "SAR02", concluido: false, coords: [-23.4657, -46.5401], imagem: 'https://socorrodesentupidora.com.br/wp-content/uploads/2023/01/bueiro-entupido-araguaina.jpeg' },
+      { rua: "Av. Monteiro Lobato", numero: 402, data: "07-05-2025", status: "concluido", descricao: "Poste danificado", setor: "SAR04", concluido: true, coords: [-23.4659, -46.5403], imagem:'https://leisecamarica.com.br/images/noticias/43285/15042022133813_Screenshot.png'  },
+      { rua: "Av. Monteiro Lobato", numero: 405, data: "01-05-2025", status: "concluido", descricao: "Iluminação quebrada", setor: "SAR04", concluido: true, coords: [-23.4663, -46.5405], imagem: 'https://thumbs.dreamstime.com/b/luz-de-rua-quebrada-50463352.jpg'  }
+    ];
+
+    chamados.forEach(chamado => {
+      if (!chamado.concluido) {
+        const marker = L.circleMarker(chamado.coords, {
+          radius: 10,
+          color: getColor(chamado.status),
+          fillOpacity: 0.7
+        }).addTo(map);
+
+        marker.on('click', () => showChamadosRua(chamado.rua));
+      }
+      if (chamado.vistoriado) {
+        const marker = L.circleMarker(chamado.coords, {
+          radius: 10,
+          color: getColor(chamado.status),
+          fillOpacity: 0.7
+        }).addTo(map);
+
+        marker.on('click', () => showChamadosRua(chamado.rua));
+      }
+    });
+
+    function getColor(status) {
+      return {
+        "aberto": 'red',
+        "vistoriado": 'orange',
+        "processo": 'blue',
+        "concluido": 'green'
+      }[status] || 'gray';
+    }
+
+    function showChamadosRua(rua) {
+      const sidebar = document.getElementById('sidebar');
+      const list = document.getElementById('report-list');
+      const title = sidebar.querySelector('h3');
+title.textContent = `Chamados na ${rua}`;
+      sidebar.classList.add('active');
+      list.innerHTML = '';
+
+      const chamadosRua = chamados.filter(c => c.rua === rua);
+
+      chamadosRua.forEach(c => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <img src="${c.imagem}" alt="Imagem do chamado" style="width: 100px; height: 100px; object-fit: cover; margin-right: 10px; vertical-align: middle;">
+          <strong>${c.setor}</strong> - ${c.descricao}<br>
+          <small>${c.data} - Nº ${c.numero}</small>
+          <span class="status ${c.status.toLowerCase().replace(/\W+/g, '-')}">${c.status}</span>
+        `;
+        list.appendChild(li);
+      });
+    }
+    function openForm() {
+      document.getElementById('formOverlay').style.display = 'flex';
+    }
+    function alerta(){
+      return alert("Demanda registrada!")
+    }
+
+    function closeForm() {
+      document.getElementById('formOverlay').style.display = 'none';
+    }
+    function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.remove('active');
+}
+;
+
+  </script>
+</body>
+</html>
